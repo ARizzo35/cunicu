@@ -50,7 +50,9 @@ func (mb *MultiBackend) ByType(t signalingproto.BackendType) Backend {
 func (mb *MultiBackend) Publish(ctx context.Context, kp *crypto.KeyPair, msg *Message) error {
 	for _, b := range mb.Backends {
 		if err := b.Publish(ctx, kp, msg); err != nil {
-			return err
+			if err != ErrNotReady {
+				return err
+			}
 		}
 	}
 

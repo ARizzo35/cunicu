@@ -23,6 +23,7 @@ var (
 
 	ErrInvalidBackend = errors.New("unknown backend type")
 	ErrClosed         = errors.New("backend is closed")
+	ErrNotReady       = errors.New("backend is not ready")
 )
 
 type BackendType string // URL schemes

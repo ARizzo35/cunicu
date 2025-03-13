@@ -8,12 +8,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"time"
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"cunicu.li/cunicu/pkg/backoff"
 	"cunicu.li/cunicu/pkg/crypto"
 	"cunicu.li/cunicu/pkg/log"
 	"cunicu.li/cunicu/pkg/proto"
@@ -31,8 +33,9 @@ func init() { //nolint:gochecknoinits
 type Backend struct {
 	signaling.SubscriptionsRegistry
 
-	client signalingproto.SignalingClient
-	conn   *grpc.ClientConn
+	client    signalingproto.SignalingClient
+	conn      *grpc.ClientConn
+	connected bool
 
 	config BackendConfig
 
@@ -45,6 +48,7 @@ func NewBackend(cfg *signaling.BackendConfig, logger *log.Logger) (signaling.Bac
 	b := &Backend{
 		SubscriptionsRegistry: signaling.NewSubscriptionsRegistry(),
 		logger:                logger,
+		connected:             false,
 	}
 
 	if err := b.config.Parse(cfg); err != nil {
@@ -58,22 +62,33 @@ func NewBackend(cfg *signaling.BackendConfig, logger *log.Logger) (signaling.Bac
 	b.client = signalingproto.NewSignalingClient(b.conn)
 
 	go func() {
-		bi, err := b.client.GetBuildInfo(context.Background(), &proto.Empty{}, grpc.WaitForReady(true))
-		if err != nil {
-			b.logger.Error("Failed to get build info from the gRPC signaling server", zap.Error(err))
+		bo := &backoff.ExponentialBackOff{
+			InitialInterval:     500 * time.Millisecond,
+			RandomizationFactor: 0.5,
+			Multiplier:          1.5,
+			MaxInterval:         1 * time.Minute,
 		}
+		for _, d := range backoff.Retry(bo) {
+			if bi, err := b.client.GetBuildInfo(context.Background(), &proto.Empty{}, grpc.WaitForReady(false)); err != nil {
+				b.logger.Error("Failed to get build info from the gRPC signaling server", zap.Error(err), zap.Duration("after", d))
+			} else {
+				b.connected = true
 
-		b.logger.Debug("Connected to GRPC signaling server",
-			zap.String("server_arch", bi.Arch),
-			zap.String("server_version", bi.Version),
-			zap.String("server_commit", bi.Commit),
-			zap.String("server_tag", bi.Tag),
-			zap.String("server_branch", bi.Branch),
-			zap.String("server_os", bi.Os),
-		)
+				b.logger.Debug("Connected to GRPC signaling server",
+					zap.String("server_arch", bi.Arch),
+					zap.String("server_version", bi.Version),
+					zap.String("server_commit", bi.Commit),
+					zap.String("server_tag", bi.Tag),
+					zap.String("server_branch", bi.Branch),
+					zap.String("server_os", bi.Os),
+				)
 
-		for _, h := range cfg.OnReady {
-			h.OnSignalingBackendReady(b)
+				for _, h := range cfg.OnReady {
+					h.OnSignalingBackendReady(b)
+				}
+
+				break
+			}
 		}
 	}()
 
@@ -112,16 +127,16 @@ func (b *Backend) Unsubscribe(ctx context.Context, kp *crypto.KeyPair, h signali
 }
 
 func (b *Backend) Publish(ctx context.Context, kp *crypto.KeyPair, msg *signaling.Message) error {
+	if !b.connected {
+		return signaling.ErrNotReady
+	}
+
 	env, err := msg.Encrypt(kp)
 	if err != nil {
 		return fmt.Errorf("failed to encrypt message: %w", err)
 	}
 
-	if _, err = b.client.Publish(ctx, env, grpc.WaitForReady(true)); err != nil {
-		if status.Code(err) == codes.Canceled {
-			return signaling.ErrClosed
-		}
-
+	if _, err = b.client.Publish(ctx, env, grpc.WaitForReady(false)); err != nil {
 		return fmt.Errorf("failed to publish message: %w", err)
 	}
 
@@ -141,37 +156,44 @@ func (b *Backend) subscribeFromServer(ctx context.Context, pk *crypto.Key) error
 		Key: pk.Bytes(),
 	}
 
-	stream, err := b.client.Subscribe(ctx, params, grpc.WaitForReady(true))
-	if err != nil {
-		return fmt.Errorf("failed to subscribe to offers: %w", err)
-	}
-
-	// Wait until subscription has been created
-	// This avoids a race between Subscribe() / Publish() when two subscribers are subscribing
-	// to each other.
-	if _, err := stream.Recv(); err != nil {
-		return fmt.Errorf("failed receive synchronization envelope: %w", err)
-	}
-
-	b.logger.Debug("Created new subscription", zap.Any("pk", pk))
-
 	go func() {
-		for {
-			env, err := stream.Recv()
+		bo := &backoff.ExponentialBackOff{
+			InitialInterval:     500 * time.Millisecond,
+			RandomizationFactor: 0.5,
+			Multiplier:          1.5,
+			MaxInterval:         1 * time.Minute,
+		}
+	outer:
+		for _, d := range backoff.Retry(bo) {
+			stream, err := b.client.Subscribe(ctx, params, grpc.WaitForReady(false))
 			if err != nil {
-				if !errors.Is(err, io.EOF) && status.Code(err) != codes.Canceled {
-					b.logger.Error("Subscription stream closed. Re-subscribing..", zap.Error(err))
-
-					if err := b.subscribeFromServer(ctx, pk); err != nil && status.Code(err) != codes.Canceled {
-						b.logger.Error("Failed to resubscribe", zap.Error(err))
-					}
-				}
-
-				break
+				b.logger.Error("failed to subscribe to offers", zap.Error(err), zap.Duration("after", d))
+				continue
+			}
+			// Wait until subscription has been created
+			// This avoids a race between Subscribe() / Publish() when two subscribers are subscribing
+			// to each other.
+			if _, err := stream.Recv(); err != nil {
+				b.logger.Error("failed receive synchronization envelope", zap.Error(err), zap.Duration("after", d))
+				continue
 			}
 
-			if err := b.SubscriptionsRegistry.NewMessage(env); err != nil {
-				b.logger.Error("Failed to decrypt message", zap.Error(err))
+			b.logger.Debug("Created new subscription", zap.Any("pk", pk))
+
+			for {
+				env, err := stream.Recv()
+				if err != nil {
+					if !errors.Is(err, io.EOF) && status.Code(err) != codes.Canceled {
+						b.logger.Error("Subscription stream closed. Re-subscribing..", zap.Error(err))
+						continue outer
+					}
+
+					break outer
+				}
+
+				if err := b.SubscriptionsRegistry.NewMessage(env); err != nil {
+					b.logger.Error("Failed to decrypt message", zap.Error(err))
+				}
 			}
 		}
 	}()
