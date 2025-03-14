@@ -8,17 +8,22 @@ import (
 	"net/url"
 
 	"cunicu.li/cunicu/pkg/crypto"
+	"cunicu.li/cunicu/pkg/log"
 	signalingproto "cunicu.li/cunicu/pkg/proto/signaling"
+	"go.uber.org/zap"
 )
 
 type MultiBackend struct {
 	Backends []Backend
+	logger   *log.Logger
 }
 
 func NewMultiBackend(uris []url.URL, cfg *BackendConfig) (*MultiBackend, error) {
 	mb := &MultiBackend{
 		Backends: []Backend{},
 	}
+
+	mb.logger = log.Global.Named("backend.multi")
 
 	for _, u := range uris {
 		cfg.URI = &u
@@ -48,41 +53,45 @@ func (mb *MultiBackend) ByType(t signalingproto.BackendType) Backend {
 }
 
 func (mb *MultiBackend) Publish(ctx context.Context, kp *crypto.KeyPair, msg *Message) error {
+	var err error = nil
 	for _, b := range mb.Backends {
-		if err := b.Publish(ctx, kp, msg); err != nil {
-			return err
+		if err = b.Publish(ctx, kp, msg); err != nil {
+			mb.logger.Error("Failed to publish", zap.Error(err), zap.Any("type", b.Type()))
 		}
 	}
 
-	return nil
+	return err
 }
 
 func (mb *MultiBackend) Subscribe(ctx context.Context, kp *crypto.KeyPair, h MessageHandler) (bool, error) {
+	var err error = nil
 	for _, b := range mb.Backends {
-		if _, err := b.Subscribe(ctx, kp, h); err != nil {
-			return false, err
+		if _, err = b.Subscribe(ctx, kp, h); err != nil {
+			mb.logger.Error("Failed to subscribe", zap.Error(err), zap.Any("type", b.Type()))
 		}
 	}
 
-	return false, nil
+	return false, err
 }
 
 func (mb *MultiBackend) Unsubscribe(ctx context.Context, kp *crypto.KeyPair, h MessageHandler) (bool, error) {
+	var err error = nil
 	for _, b := range mb.Backends {
-		if _, err := b.Unsubscribe(ctx, kp, h); err != nil {
-			return false, err
+		if _, err = b.Unsubscribe(ctx, kp, h); err != nil {
+			mb.logger.Error("Failed to unsubscribe", zap.Error(err), zap.Any("type", b.Type()))
 		}
 	}
 
-	return false, nil
+	return false, err
 }
 
 func (mb *MultiBackend) Close() error {
+	var err error = nil
 	for _, b := range mb.Backends {
-		if err := b.Close(); err != nil {
-			return err
+		if err = b.Close(); err != nil {
+			mb.logger.Error("Failed to close", zap.Error(err), zap.Any("type", b.Type()))
 		}
 	}
 
-	return nil
+	return err
 }
