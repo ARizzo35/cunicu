@@ -5,15 +5,11 @@ package grpc
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"io"
 	"time"
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	"cunicu.li/cunicu/pkg/backoff"
 	"cunicu.li/cunicu/pkg/crypto"
@@ -183,14 +179,12 @@ func (b *Backend) subscribeFromServer(ctx context.Context, pk *crypto.Key) error
 			for {
 				env, err := stream.Recv()
 				if err != nil {
-					if errors.Is(err, io.EOF) || status.Code(err) == codes.Canceled || status.Code(err) == codes.Internal {
-						b.logger.Error("Subscription stream error. Re-subscribing..", zap.Error(err))
-						continue outer
-					} else {
-						b.logger.Warn("Stream recv error", zap.Error(err))
-					}
-
-					break outer
+					//if errors.Is(err, io.EOF) || status.Code(err) == codes.Canceled || status.Code(err) == codes.Internal {
+					b.logger.Error("Subscription stream error. Re-subscribing..", zap.Error(err))
+					continue outer
+					//} else {
+					//	b.logger.Warn("Stream recv error", zap.Error(err))
+					//}
 				}
 
 				if err := b.SubscriptionsRegistry.NewMessage(env); err != nil {
