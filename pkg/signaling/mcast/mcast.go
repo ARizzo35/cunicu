@@ -60,6 +60,7 @@ func (b *Backend) run() {
 
 	for {
 		n, err := b.conn.Read(buf)
+		b.logger.Debug("Received mcast message")
 		if err != nil {
 			if errors.Is(err, net.ErrClosed) {
 				break
