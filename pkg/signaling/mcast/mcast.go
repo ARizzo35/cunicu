@@ -60,16 +60,13 @@ func (b *Backend) run() {
 
 	for {
 		n, err := b.conn.Read(buf)
-		b.logger.Debug("Received mcast message")
 		if err != nil {
-			if errors.Is(err, net.ErrClosed) {
-				break
-			}
-
 			b.logger.Error("Error reading from UDPConn", zap.Error(err))
 
 			continue
 		}
+
+		b.logger.Debug("Received mcast message")
 
 		var env signalingproto.Envelope
 		if err = proto.Unmarshal(buf[:n], &env); err != nil {
@@ -81,6 +78,8 @@ func (b *Backend) run() {
 		if err := b.SubscriptionsRegistry.NewMessage(&env); err != nil {
 			if !errors.Is(err, signaling.ErrNotSubscribed) {
 				b.logger.Error("Failed to decrypt message", zap.Error(err))
+			} else {
+				b.logger.Debug("Not subscribed", zap.Error(err))
 			}
 
 			continue
