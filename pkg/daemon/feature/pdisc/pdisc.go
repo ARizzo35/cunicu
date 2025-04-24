@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -76,6 +77,7 @@ func (i *Interface) Start() error {
 		Ours:   crypto.Key(i.Settings.Community),
 		Theirs: crypto.Key{},
 	}
+
 	if _, err := i.Daemon.Backend.Subscribe(context.Background(), kp, i); err != nil {
 		return fmt.Errorf("failed to subscribe on peer discovery channel: %w", err)
 	}
@@ -182,11 +184,14 @@ func (i *Interface) sendPeerDescription(chg pdiscproto.PeerDescriptionChange, pk
 		Theirs: crypto.Key(i.Settings.Community).PublicKey(),
 	}
 
-	if err := i.Daemon.Backend.Publish(context.Background(), kp, msg); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := i.Daemon.Backend.Publish(ctx, kp, msg); err != nil {
 		return err
 	}
 
-	i.logger.Debug("Send peer description", zap.Reflect("description", d))
+	i.logger.Debug("Sent peer description", zap.Reflect("description", d))
 
 	return nil
 }
