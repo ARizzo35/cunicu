@@ -14,8 +14,6 @@ import (
 
 	"github.com/pion/ice/v4"
 	"go.uber.org/zap"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	"cunicu.li/cunicu/pkg/backoff"
 	"cunicu.li/cunicu/pkg/crypto"
@@ -265,7 +263,7 @@ func (p *Peer) sendCredentials(need bool) error {
 	}
 
 	// TODO: Is this timeout suitable?
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	if err := p.Interface.Daemon.Backend.Publish(ctx, p.PublicPrivateKeyPair(), msg); err != nil {
@@ -282,7 +280,7 @@ func (p *Peer) sendCandidate(c ice.Candidate) error {
 		Candidate: epdiscproto.NewCandidate(c),
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	if err := p.Interface.Daemon.Backend.Publish(ctx, p.PublicPrivateKeyPair(), msg); err != nil {
@@ -393,16 +391,11 @@ func (p *Peer) sendCredentialsWhileIdleWithBackoff(need bool) {
 		}
 
 		if err := p.sendCredentials(need); err != nil {
-			if errors.Is(err, signaling.ErrClosed) {
-				// Do not retry when the signaling backend has been closed
-				break
-			} else if sts := status.Code(err); sts != codes.Canceled {
-				p.logger.Error("Failed to send peer credentials",
-					zap.Error(err),
-					zap.Duration("after", d))
+			p.logger.Error("Failed to send peer credentials",
+				zap.Error(err),
+				zap.Duration("after", d))
 
-				continue
-			}
+			continue
 		}
 
 		p.logger.Debug("Sending peer credentials while waiting for remote peer",
