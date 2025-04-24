@@ -12,6 +12,7 @@ ginkgo.report
 *.out
 *.test
 *.out.*
+*.swp
 test/e2e/logs/
 dist/
 result
