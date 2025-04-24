@@ -54,13 +54,20 @@ func (mb *MultiBackend) ByType(t signalingproto.BackendType) Backend {
 
 func (mb *MultiBackend) Publish(ctx context.Context, kp *crypto.KeyPair, msg *Message) error {
 	var err error = nil
+	var all_failed bool = true
 	for _, b := range mb.Backends {
 		if err = b.Publish(ctx, kp, msg); err != nil {
 			mb.logger.Error("Failed to publish", zap.Error(err), zap.Any("type", b.Type()))
+		} else {
+			all_failed = false
 		}
 	}
 
-	return err
+	if all_failed {
+		return err
+	} else {
+		return nil
+	}
 }
 
 func (mb *MultiBackend) Subscribe(ctx context.Context, kp *crypto.KeyPair, h MessageHandler) (bool, error) {
