@@ -91,7 +91,7 @@ func (i *Interface) OnPeerDescription(d *pdiscproto.PeerDescription) error { //n
 
 	case pdiscproto.PeerDescriptionChange_UPDATE:
 		if cp == nil {
-			i.logger.Warn("Peer does not exist exists yet. Adding it instead")
+			i.logger.Warn("Peer does not exist yet. Adding it instead")
 
 			d.Change = pdiscproto.PeerDescriptionChange_ADD
 		}
