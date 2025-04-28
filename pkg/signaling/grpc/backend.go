@@ -62,7 +62,7 @@ func NewBackend(cfg *signaling.BackendConfig, logger *log.Logger) (signaling.Bac
 			InitialInterval:     500 * time.Millisecond,
 			RandomizationFactor: 0.5,
 			Multiplier:          1.5,
-			MaxInterval:         1 * time.Minute,
+			MaxInterval:         10 * time.Second,
 		}
 		for _, d := range backoff.Retry(bo) {
 			if bi, err := b.client.GetBuildInfo(context.Background(), &proto.Empty{}, grpc.WaitForReady(false)); err != nil {
@@ -157,7 +157,7 @@ func (b *Backend) subscribeFromServer(ctx context.Context, pk *crypto.Key) error
 			InitialInterval:     500 * time.Millisecond,
 			RandomizationFactor: 0.5,
 			Multiplier:          1.5,
-			MaxInterval:         1 * time.Minute,
+			MaxInterval:         10 * time.Second,
 		}
 	outer:
 		for _, d := range backoff.Retry(bo) {

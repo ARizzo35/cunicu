@@ -297,7 +297,7 @@ func (p *Peer) createAgentWithBackoff() {
 		InitialInterval:     500 * time.Millisecond,
 		RandomizationFactor: 0.5,
 		Multiplier:          1.5,
-		MaxInterval:         1 * time.Minute,
+		MaxInterval:         10 * time.Second,
 	}
 
 	for _, d := range backoff.Retry(bo) {
@@ -380,7 +380,7 @@ func (p *Peer) sendCredentialsWhileIdleWithBackoff(need bool) {
 		InitialInterval:     500 * time.Millisecond,
 		RandomizationFactor: 0.5,
 		Multiplier:          1.5,
-		MaxInterval:         1 * time.Minute,
+		MaxInterval:         10 * time.Second,
 	}
 
 	for _, d := range backoff.Retry(bo) {
