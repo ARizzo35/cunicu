@@ -18,6 +18,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	credsinsecure "google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/keepalive"
 
 	"cunicu.li/cunicu/pkg/backoff"
 	"cunicu.li/cunicu/pkg/buildinfo"
@@ -79,6 +80,11 @@ func ParseURL(urlStr string) (string, []grpc.DialOption, error) {
 	opts = append(opts,
 		grpc.WithTransportCredentials(creds),
 		grpc.WithUserAgent(buildinfo.UserAgent()),
+		grpc.WithKeepaliveParams(keepalive.ClientParameters{
+			Time:                10 * time.Second,
+			Timeout:             5 * time.Second,
+			PermitWithoutStream: true,
+		}),
 	)
 
 	if u.Host == "" {
