@@ -94,6 +94,15 @@ func (p *Peer) onRemoteCredentials(creds *epdiscproto.Credentials) {
 		if _, ok := p.connectionState.SetIf(ConnectionStateGathering, ConnectionStateIdle); !ok {
 			p.logger.Debug("Ignoring duplicated credentials")
 
+			// Return our own credentials if requested
+			if creds.NeedCreds {
+				if err := p.sendCredentials(false); err != nil {
+					p.logger.Error("Failed to send credentials", zap.Error(err))
+
+					return
+				}
+			}
+
 			return
 		}
 
