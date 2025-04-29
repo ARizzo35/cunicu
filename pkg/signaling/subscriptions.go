@@ -16,7 +16,6 @@ import (
 )
 
 var (
-	ErrNotReady        = errors.New("backend not ready")
 	ErrNotSubscribed   = errors.New("missing subscription")
 	errAlreadyExisting = errors.New("already existing")
 )
