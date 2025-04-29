@@ -56,12 +56,7 @@ func New(i *daemon.Interface) (*Interface, error) {
 		pd.filter[k] = false
 	}
 
-	// Avoid sending a peer description if the interface does not have a private key yet
-	if i.PrivateKey().IsSet() {
-		if err := pd.sendPeerDescription(pdiscproto.PeerDescriptionChange_ADD, nil); err != nil {
-			pd.logger.Error("Failed to send peer description", zap.Error(err))
-		}
-	}
+	go pd.sendPeerDescriptionPeriodically(i)
 
 	i.AddModifiedHandler(pd)
 	i.AddPeerHandler(pd)
@@ -99,6 +94,21 @@ func (i *Interface) Description(cp *daemon.Peer) *pdiscproto.PeerDescription {
 	}
 
 	return nil
+}
+
+func (i *Interface) sendPeerDescriptionPeriodically(d *daemon.Interface) {
+	// Try sending peer description periodically so new peers can discover us
+	for {
+		// Avoid sending a peer description if the interface does not have a private key yet
+		if d.PrivateKey().IsSet() {
+			i.logger.Debug("Sending periodic peer description")
+			if err := i.sendPeerDescription(pdiscproto.PeerDescriptionChange_ADD, nil); err != nil {
+				i.logger.Error("Failed to send peer description", zap.Error(err))
+			}
+		}
+
+		time.Sleep(30 * time.Second)
+	}
 }
 
 func (i *Interface) sendPeerDescription(chg pdiscproto.PeerDescriptionChange, pkOld *crypto.Key) error {
