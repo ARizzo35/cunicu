@@ -5,18 +5,23 @@
 package grpc
 
 import (
+	"context"
 	"crypto/tls"
 	"errors"
 	"fmt"
 	"net/url"
 	"os"
 	"strconv"
+	"time"
 
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	credsinsecure "google.golang.org/grpc/credentials/insecure"
 
+	"cunicu.li/cunicu/pkg/backoff"
 	"cunicu.li/cunicu/pkg/buildinfo"
+	"cunicu.li/cunicu/pkg/proto"
 )
 
 var errInvalidServerHostname = errors.New("missing gRPC server url")
@@ -81,4 +86,35 @@ func ParseURL(urlStr string) (string, []grpc.DialOption, error) {
 	}
 
 	return u.Host, opts, nil
+}
+
+func (b *Backend) connect() {
+	bo := &backoff.ExponentialBackOff{
+		InitialInterval:     500 * time.Millisecond,
+		RandomizationFactor: 0.5,
+		Multiplier:          1.5,
+		MaxInterval:         10 * time.Second,
+	}
+	for _, d := range backoff.Retry(bo) {
+		if bi, err := b.client.GetBuildInfo(context.Background(), &proto.Empty{}, grpc.WaitForReady(false)); err != nil {
+			b.logger.Error("Failed to get build info from the gRPC signaling server", zap.Error(err), zap.Duration("after", d))
+		} else {
+			b.connected = true
+
+			b.logger.Info("Connected to GRPC signaling server",
+				zap.String("server_arch", bi.Arch),
+				zap.String("server_version", bi.Version),
+				zap.String("server_commit", bi.Commit),
+				zap.String("server_tag", bi.Tag),
+				zap.String("server_branch", bi.Branch),
+				zap.String("server_os", bi.Os),
+			)
+
+			for _, h := range b.config.OnReady {
+				h.OnSignalingBackendReady(b)
+			}
+
+			break
+		}
+	}
 }
