@@ -47,11 +47,26 @@ func (i *Interface) setupUDPMux() error {
 	}
 
 	ifFilter := func(name string) bool {
-		if include, err := filepath.Match(i.Settings.ICE.InterfacesInclude, name); err != nil {
-			return false
-		} else if exclude, err := filepath.Match(i.Settings.ICE.InterfacesExclude, name); err != nil {
-			return false
-		} else if !include || exclude {
+		var include bool = false
+		var exclude bool = false
+		var err error = nil
+		for _, filter := range i.Settings.ICE.InterfacesInclude {
+			if include, err = filepath.Match(filter, name); err != nil {
+				return false
+			}
+			if include {
+				break
+			}
+		}
+		for _, filter := range i.Settings.ICE.InterfacesExclude {
+			if exclude, err = filepath.Match(filter, name); err != nil {
+				return false
+			}
+			if exclude {
+				break
+			}
+		}
+		if !include || exclude {
 			return false
 		}
 
