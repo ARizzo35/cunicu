@@ -311,11 +311,13 @@ ice:
   # network_types: [udp4, udp6, tcp4, tcp6]
   # candidate_types: [host, srflx, prflx, relay]
 
-  # A glob(7) pattern to match interfaces against which are used to gather ICE candidates (e.g. \"eth[0-9]\").
-  interfaces_include: "*"
+  # A list of glob(7) patterns to match interfaces against which are used to gather ICE candidates (e.g. \"eth[0-9]\").
+  interfaces_include:
+    - "*"
 
-  # A glob(7) pattern to match interfaces against which are ignored when gathering ICE candidates (e.g. \"tun[0-9]\").
-  interfaces_exclude: ""
+  # A list of glob(7) patterns to match interfaces against which are *not* used to gather ICE candidates (e.g. \"tun[0-9]\").
+  interfaces_exclude:
+    - ""
 
   # Lite agents do not perform connectivity check and only provide host candidates.
   lite: false

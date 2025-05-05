@@ -466,22 +466,26 @@ $defs:
       interfaces_include:
         title: Include Interface Filter
         description: |
-          A [glob(7)](https://manpages.debian.org/bookworm/manpages/glob.7.en.html) pattern to match interfaces against which are used to gather ICE candidates (e.g. `eth[0-9]`).
-        type: string
-        default: "*"
-        examples:
-        - eth*
-        - wlan0
+          A list of [glob(7)](https://manpages.debian.org/bookworm/manpages/glob.7.en.html) patterns to match interfaces against which are used to gather ICE candidates (e.g. `eth[0-9]`).
+        type: array
+        items:
+          type: string
+          examples:
+          - eth*
+          - wlan0
+        default:
+          - "*"
 
       interfaces_exclude:
         title: Exclude Interface Filter
         description: |
-          A [glob(7)](https://manpages.debian.org/bookworm/manpages/glob.7.en.html) pattern to match interfaces against which are not used to gather ICE candidates (e.g. `eth[0-9]`).
+          A list of [glob(7)](https://manpages.debian.org/bookworm/manpages/glob.7.en.html) patterns to match interfaces against which are *not* used to gather ICE candidates (e.g. `eth[0-9]`).
         type: string
-        default: ""
-        examples:
-        - eth*
-        - wlan0
+          examples:
+          - eth*
+          - wlan0
+        default:
+          - ""
 
       lite:
         title: Lite Agent
